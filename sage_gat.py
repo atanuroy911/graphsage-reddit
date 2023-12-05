@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-from torch_geometric.data import NeighborSampler
 
 from torch_geometric.utils import (
     coalesce,
@@ -35,15 +34,20 @@ from torch_geometric.nn import (
     MessagePassing,
 )
 
+from torch_geometric.data import NeighborSampler
+
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class SAGE(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels):
+    def __init__(self, in_channels, hidden_channels, out_channels, num_layers):
         super().__init__()
         self.convs = torch.nn.ModuleList()
-        self.convs.append(SAGEConv(in_channels, hidden_channels))
-        self.convs.append(SAGEConv(hidden_channels, out_channels))
+        for _ in range(num_layers):
+            self.convs.append(SAGEConv(in_channels, hidden_channels))
+            in_channels = hidden_channels
+        self.num_layers = num_layers
 
     def forward(self, x, edge_index):
         for i, conv in enumerate(self.convs):
@@ -63,17 +67,16 @@ class SAGE(torch.nn.Module):
         # immediately computing the final representations of each batch:
         for i, conv in enumerate(self.convs):
             xs = []
-            for batch in subgraph_loader:
-                x = x_all[batch.n_id.to(x_all.device)].to(device)
-                x = conv(x, batch.edge_index.to(device))
+            for batch_size, n_id, adj in subgraph_loader:
+                x = x_all[n_id].to(device)
+                x = conv(x, adj.to(device))
                 if i < len(self.convs) - 1:
                     x = x.relu_()
-                xs.append(x[:batch.batch_size].cpu())
-                pbar.update(batch.batch_size)
+                xs.append(x.cpu())
+                pbar.update(batch_size)
             x_all = torch.cat(xs, dim=0)
         pbar.close()
         return x_all
-    
 
 class NodeSampler(torch.utils.data.DataLoader):
     def __init__(self, data, size, num_layers):
@@ -88,3 +91,6 @@ class NodeSampler(torch.utils.data.DataLoader):
         adj = NeighborSampler(data_list, size=self.size, num_hops=self.num_layers, batch_size=batch_size,
                               shuffle=False).adj_t
         return batch_size, n_id, adj
+
+    
+
