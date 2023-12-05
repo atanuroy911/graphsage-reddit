@@ -18,6 +18,7 @@ from torch_geometric.loader import NeighborLoader, DataLoader
 
 from torch_geometric.datasets import Reddit
 
+from sage import NodeSampler
 
 print(torch.__version__)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -99,7 +100,7 @@ subgraph_loader.data.n_id = torch.arange(data.num_nodes)
 from sage import SAGE
 
 model = SAGE(dataset.num_features, 256, dataset.num_classes).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+optimizer = torch.optim.NAdam(model.parameters(), lr=0.0001)
 
 sage_train_accs, sage_val_accs, sage_test_accs = [], [], []
 
@@ -174,7 +175,7 @@ plt.plot(epochs, sage_train_accs, label='Train')
 plt.plot(epochs, sage_val_accs, label='Validation')
 plt.xlabel('Epoch')
 plt.ylabel('Accuracy')
-plt.title('SAGE Accuracy')
+plt.title('SAGE with Node Sampling Accuracy')
 plt.legend()
-plt.savefig('sage_accuracy.png')
+plt.savefig('sage_node_accuracy.png')
 plt.close()
